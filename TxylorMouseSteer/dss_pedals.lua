@@ -6,15 +6,18 @@ local cfg = require "dss_config"
 
 local pedals = {}
 
-pedals.gasValue       = 0
-pedals.brakeValue     = 0
-pedals.handbrakeValue = 0
+pedals.gasValue          = 0
+pedals.brakeValue        = 0
+pedals.handbrakeValue    = 0
 pedals.scrollBrakeTarget = 0
 
--- scrollGas: 0 a 1 (só gás ou lado gás do modo ambos)
--- scrollBrake: 0 a 1 (só freio ou lado freio do modo ambos)
+-- Modo separado (Ambos sem Gradual): dois valores independentes
 local scrollGas   = 0.0
 local scrollBrake = 0.0
+
+-- Modo gradual (Ambos + Gradual): valor único -1..1
+-- positivo = gás, negativo = freio, zero = neutro
+local scrollContinuous = 0.0
 
 function pedals.approach(current, target, speed, dt)
 	if current < target then
@@ -27,57 +30,90 @@ end
 function pedals.updateGas(dt, gasTarget, ui)
 	if cfg.SCROLL_GAS_ENABLED then
 		local wheel = (ui and ui.mouseWheel) or 0
-
-		-- Aplica inversão
 		if cfg.SCROLL_GAS_INVERT then wheel = -wheel end
 
-		-- Desativa acima da velocidade máxima
+		-- Zera tudo acima da velocidade máxima
 		if cfg.SCROLL_GAS_MAX_SPEED > 0 and car.speedKmh > cfg.SCROLL_GAS_MAX_SPEED then
-			scrollGas   = 0.0
-			scrollBrake = 0.0
+			scrollGas        = 0.0
+			scrollBrake      = 0.0
+			scrollContinuous = 0.0
+
 		elseif wheel ~= 0 then
-			local mode = cfg.SCROLL_GAS_MODE
 			local step = cfg.SCROLL_GAS_STEP
+			local mode = cfg.SCROLL_GAS_MODE
 
 			if mode == 0 then
-				-- Só gás: scroll em qualquer direção acumula gás
-				scrollGas   = math.clamp(scrollGas + wheel * step, 0.0, 1.0)
-				scrollBrake = 0.0
+				-- Só gás
+				scrollGas        = math.clamp(scrollGas + wheel * step, 0.0, 1.0)
+				scrollBrake      = 0.0
+				scrollContinuous = 0.0
 
 			elseif mode == 1 then
-				-- Só freio: scroll em qualquer direção acumula freio
-				scrollBrake = math.clamp(scrollBrake + (-wheel) * step, 0.0, 1.0)
-				scrollGas   = 0.0
+				-- Só freio
+				scrollBrake      = math.clamp(scrollBrake + (-wheel) * step, 0.0, 1.0)
+				scrollGas        = 0.0
+				scrollContinuous = 0.0
 
 			else
-				-- Ambos: ↑ gás, ↓ freio (separados, não se misturam)
-				if wheel > 0 then
-					scrollGas   = math.clamp(scrollGas + wheel * step, 0.0, 1.0)
-					scrollBrake = 0.0   -- sobe = zera freio
+				-- Ambos
+				if cfg.SCROLL_GAS_GRADUAL then
+					-- ✅ Modo gradual: valor único -1..1 que atravessa o zero suavemente
+					-- ↑ aumenta (vai para gás), ↓ diminui (vai para freio)
+					scrollContinuous = math.clamp(scrollContinuous + wheel * step, -1.0, 1.0)
+					scrollGas   = 0.0
+					scrollBrake = 0.0
 				else
-					scrollBrake = math.clamp(scrollBrake + (-wheel) * step, 0.0, 1.0)
-					scrollGas   = 0.0   -- desce = zera gás
+					-- Modo separado: ↑ zera freio e aumenta gás, ↓ zera gás e aumenta freio
+					if wheel > 0 then
+						scrollGas   = math.clamp(scrollGas + wheel * step, 0.0, 1.0)
+						scrollBrake = 0.0
+					else
+						scrollBrake = math.clamp(scrollBrake + (-wheel) * step, 0.0, 1.0)
+						scrollGas   = 0.0
+					end
+					scrollContinuous = 0.0
 				end
 			end
 		end
 
-		-- Decay: ambos decaem em direção ao zero
+		-- Decay: empurra tudo em direção ao zero
 		if cfg.SCROLL_GAS_DECAY > 0 then
 			scrollGas   = math.max(scrollGas   - cfg.SCROLL_GAS_DECAY * dt, 0.0)
 			scrollBrake = math.max(scrollBrake - cfg.SCROLL_GAS_DECAY * dt, 0.0)
+			if scrollContinuous > 0 then
+				scrollContinuous = math.max(scrollContinuous - cfg.SCROLL_GAS_DECAY * dt, 0.0)
+			elseif scrollContinuous < 0 then
+				scrollContinuous = math.min(scrollContinuous + cfg.SCROLL_GAS_DECAY * dt, 0.0)
+			end
 		end
 
-		-- Reset ao frear manualmente (só reseta o gás)
+		-- Extrai gás e freio finais dependendo do modo ativo
+		local finalGas, finalBrake
+		if cfg.SCROLL_GAS_MODE == 2 and cfg.SCROLL_GAS_GRADUAL then
+			finalGas   = math.max(scrollContinuous, 0.0)   -- parte positiva
+			finalBrake = math.max(-scrollContinuous, 0.0)  -- parte negativa (invertida)
+		else
+			finalGas   = scrollGas
+			finalBrake = scrollBrake
+		end
+
+		-- Reset ao frear manualmente (só reseta o lado do gás)
 		if cfg.SCROLL_GAS_RESET_ON_BRAKE and pedals.brakeValue > 0.1 then
-			scrollGas = 0.0
+			scrollGas        = 0.0
+			scrollContinuous = math.min(scrollContinuous, 0.0) -- mantém só parte negativa
+			finalGas         = 0.0
 		end
 
-		gasTarget = math.max(gasTarget, scrollGas)
-		pedals.scrollBrakeTarget = scrollBrake
+		gasTarget                = math.max(gasTarget, finalGas)
+		pedals.scrollBrakeTarget = finalBrake
 
-		-- Exporta valor combinado para preview na UI
-		-- positivo = gás, negativo = freio
-		local displayVal = scrollGas > 0 and scrollGas or -scrollBrake
+		-- Exporta para preview (positivo=gás, negativo=freio)
+		local displayVal
+		if cfg.SCROLL_GAS_MODE == 2 and cfg.SCROLL_GAS_GRADUAL then
+			displayVal = scrollContinuous
+		else
+			displayVal = finalGas > 0 and finalGas or -finalBrake
+		end
 		ac.store('dss_scroll_gas_value', displayVal)
 	else
 		pedals.scrollBrakeTarget = 0
