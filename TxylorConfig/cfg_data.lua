@@ -29,8 +29,8 @@ M.cfg = {
 	scroll_gas_reset_on_brake = true,
 	scroll_gas_max_speed      = 0.0,
 	scroll_gas_invert         = false,
-	-- 0 = só gás | 1 = só freio | 2 = ambos (↑ gás, ↓ freio)
-	scroll_gas_mode           = 2,
+	scroll_gas_mode           = 2,      -- 0=só gás | 1=só freio | 2=ambos
+	scroll_gas_gradual        = false,  -- modo contínuo -1..1 (só no modo Ambos)
 	autoclutch_enabled       = true,
 	autoclutch_depth         = 1.0,
 	autoclutch_press_speed   = 10.0,
@@ -142,7 +142,7 @@ M.SAVE_KEYS = {
 	'clutch_press','clutch_release',
 	'scroll_gas_enabled','scroll_gas_step','scroll_gas_decay',
 	'scroll_gas_reset_on_brake','scroll_gas_max_speed',
-	'scroll_gas_invert','scroll_gas_mode',
+	'scroll_gas_invert','scroll_gas_mode','scroll_gas_gradual',
 	'autoclutch_enabled','autoclutch_depth',
 	'autoclutch_press_speed','autoclutch_release_speed',
 	'antistall_enabled','antistall_full_speed','antistall_min_speed',
@@ -171,6 +171,7 @@ M.BOOL_KEYS = {
 	blip_enabled=true, blip_only_braking=true,
 	cruise_enabled=true, scroll_gas_enabled=true,
 	scroll_gas_reset_on_brake=true, scroll_gas_invert=true,
+	scroll_gas_gradual=true,
 }
 
 return M
