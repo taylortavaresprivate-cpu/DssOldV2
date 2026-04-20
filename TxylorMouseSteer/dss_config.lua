@@ -59,8 +59,8 @@ cfg.SCROLL_GAS_DECAY          = 0.0
 cfg.SCROLL_GAS_RESET_ON_BRAKE = true
 cfg.SCROLL_GAS_MAX_SPEED      = 0.0
 cfg.SCROLL_GAS_INVERT         = false
--- 0 = só gás | 1 = só freio | 2 = ambos (↑ gás, ↓ freio)
-cfg.SCROLL_GAS_MODE           = 2
+cfg.SCROLL_GAS_MODE           = 2      -- 0=só gás | 1=só freio | 2=ambos
+cfg.SCROLL_GAS_GRADUAL        = false  -- modo contínuo -1..1 (só no modo Ambos)
 
 cfg.ABS_ENABLED      = true
 cfg.ABS_LEVEL        = 15
@@ -213,6 +213,7 @@ function cfg.loadConfig()
 	cfg.SCROLL_GAS_MAX_SPEED      = getf("scroll_gas_max_speed",      cfg.SCROLL_GAS_MAX_SPEED)
 	cfg.SCROLL_GAS_INVERT         = getb("scroll_gas_invert",         cfg.SCROLL_GAS_INVERT)
 	cfg.SCROLL_GAS_MODE           = clamp(getf("scroll_gas_mode",     cfg.SCROLL_GAS_MODE), 0, 2)
+	cfg.SCROLL_GAS_GRADUAL        = getb("scroll_gas_gradual",        cfg.SCROLL_GAS_GRADUAL)
 
 	cfg.ABS_ENABLED      = getb("abs_enabled",     cfg.ABS_ENABLED)
 	cfg.ABS_MIN_SPEED    = getf("abs_min_speed",    cfg.ABS_MIN_SPEED)
